@@ -1,0 +1,1409 @@
+<html lang="de"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Ebbinghaus">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#1e3a5f">
+  <meta name="description" content="Multi-Plan Check-in Tool basierend auf der Ebbinghaus’schen Vergessenskurve">
+  <link rel="manifest" href="data:application/manifest+json,{&quot;name&quot;:&quot;Ebbinghaus-Check-in&quot;,&quot;short_name&quot;:&quot;Ebbinghaus&quot;,&quot;start_url&quot;:&quot;.&quot;,&quot;display&quot;:&quot;standalone&quot;,&quot;background_color&quot;:&quot;#1e3a5f&quot;,&quot;theme_color&quot;:&quot;#1e3a5f&quot;,&quot;orientation&quot;:&quot;portrait&quot;,&quot;icons&quot;:[{&quot;src&quot;:&quot;data:image/svg+xml,&lt;svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'&gt;&lt;rect fill='%231e3a5f' width='100' height='100' rx='20'/&gt;&lt;text y='.9em' x='50%' text-anchor='middle' font-size='60'&gt;🧠&lt;/text&gt;&lt;/svg&gt;&quot;,&quot;sizes&quot;:&quot;any&quot;,&quot;type&quot;:&quot;image/svg+xml&quot;,&quot;purpose&quot;:&quot;any maskable&quot;}]}">
+  <title>Ebbinghaus-Check-in</title>
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2c5282;
+      --accent: #c2410c;
+      --success: #15803d;
+      --success-bg: #dcfce7;
+      --today: #ea580c;
+      --today-bg: #fff7ed;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --text: #1e293b;
+      --muted: #64748b;
+      --border: #e2e8f0;
+      --radius: 14px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      padding-bottom: calc(70px + var(--safe-bottom));
+      padding-top: var(--safe-top);
+    }
+
+    .topbar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--primary); color: white;
+      padding: 10px 12px;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+    }
+    .topbar h1 { font-size: 1.05rem; font-weight: 700; white-space: nowrap; }
+    .plan-select {
+      flex: 1; min-width: 0;
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white; border-radius: 8px;
+      padding: 6px 10px; font-size: 0.88rem;
+      font-family: inherit; outline: none;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='white'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 8px center;
+      padding-right: 24px;
+    }
+    .plan-select option { color: #222; background: #fff; }
+    .icon-btn {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: none; background: rgba(255,255,255,0.15);
+      color: white; font-size: 1.1rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: white; border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 calc(8px + var(--safe-bottom));
+      z-index: 100; box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+    }
+    .nav-item {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      padding: 6px 14px; border: none; background: none;
+      color: var(--muted); font-size: 0.72rem; cursor: pointer;
+      position: relative;
+    }
+    .nav-item.active { color: var(--primary); font-weight: 600; }
+    .nav-item .icon { font-size: 1.3rem; line-height: 1; }
+
+    .page { display: none; padding: 14px; animation: fadeIn 0.22s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+
+    .today-header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-light));
+      color: white; border-radius: var(--radius);
+      padding: 16px 18px; margin-bottom: 14px;
+    }
+    .today-header .label { font-size: 0.82rem; opacity: 0.85; }
+    .today-header .count { font-size: 1.7rem; font-weight: 700; margin-top: 2px; }
+    .today-header .sub { font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
+    .plan-tag {
+      display: inline-block; background: rgba(255,255,255,0.2);
+      padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; margin-top: 6px;
+    }
+
+    .task-card {
+      background: var(--card); border-radius: var(--radius);
+      padding: 13px 14px; margin-bottom: 9px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .task-card:active { transform: scale(0.98); }
+    .task-card.done { opacity: 0.5; }
+    .task-card.done .task-title { text-decoration: line-through; color: var(--muted); }
+
+    .check-btn {
+      width: 42px; height: 42px; border-radius: 50%;
+      border: 2.5px solid var(--border); background: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.2rem; flex-shrink: 0; cursor: pointer;
+    }
+    .check-btn.checked { background: var(--success); border-color: var(--success); color: white; }
+
+    .task-info { flex: 1; min-width: 0; }
+    .task-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; word-break: break-all; }
+    .task-meta { font-size: 0.75rem; color: var(--muted); }
+    .task-stage {
+      display: inline-block; background: #e0e7ff; color: #3730a3;
+      padding: 1px 7px; border-radius: 999px; font-size: 0.7rem; font-weight: 600; margin-right: 5px;
+    }
+    .task-stage.stage-I { background: #dcfce7; color: #166534; }
+    .task-stage.stage-review { background: #ffedd5; color: #9a3412; }
+
+    .empty-state { text-align: center; padding: 40px 16px; color: var(--muted); }
+    .empty-state .emoji { font-size: 2.3rem; margin-bottom: 10px; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; margin-bottom: 14px; }
+    @media (min-width: 420px) {
+      .stats-grid { grid-template-columns: repeat(4,1fr); }
+    }
+    .stat-box {
+      background: var(--card); border-radius: 12px; padding: 12px 6px;
+      text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+      border: 1.5px solid transparent;
+    }
+    .stat-box.clickable:active { transform: scale(0.97); }
+    .stat-box.clickable:hover { border-color: var(--primary); }
+    .stat-box.active-filter {
+      border-color: var(--primary);
+      background: #eef2ff;
+      box-shadow: 0 0 0 2px rgba(30,58,95,0.12);
+    }
+    .stat-box .num { font-size: 1.3rem; font-weight: 700; color: var(--primary); }
+    .stat-box .num.accent { color: var(--accent); }
+    .stat-box .num.success { color: var(--success); }
+    .stat-box .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 1px; }
+
+    .section-title {
+      font-size: 0.88rem; font-weight: 700; color: var(--muted);
+      margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .table-card {
+      background: var(--card); border-radius: var(--radius);
+      overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 12px;
+    }
+    .item-row { border-bottom: 1px solid var(--border); padding: 11px 12px; }
+    .item-row:last-child { border-bottom: none; }
+    .item-name {
+      font-weight: 600; font-size: 0.92rem; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .item-name input {
+      flex: 1; border: none; background: transparent;
+      font-size: 0.92rem; font-weight: 600; font-family: inherit;
+      color: var(--text); padding: 3px 0; outline: none;
+      border-bottom: 1px dashed transparent;
+    }
+    .item-name input:focus { border-bottom-color: var(--primary); }
+
+    .stages { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stage-chip {
+      display: flex; flex-direction: column; align-items: center;
+      min-width: 52px; padding: 7px 5px; border-radius: 10px;
+      border: 1.5px solid var(--border); background: #f8fafc;
+      cursor: pointer; user-select: none;
+    }
+    .stage-chip:active { transform: scale(0.95); }
+    .stage-chip .label { font-size: 0.65rem; color: var(--muted); font-weight: 600; margin-bottom: 1px; }
+    .stage-chip .date { font-size: 0.82rem; font-weight: 700; font-family: "SF Mono","Menlo",monospace; }
+    .stage-chip.today { border-color: var(--today); background: var(--today-bg); }
+    .stage-chip.today .label, .stage-chip.today .date { color: var(--today); }
+    .stage-chip.done { border-color: var(--success); background: var(--success-bg); }
+    .stage-chip.done .label, .stage-chip.done .date { color: var(--success); }
+    .stage-chip.done::after { content:'✓'; font-size:0.7rem; color:var(--success); font-weight:700; margin-top:1px; }
+    .stage-chip.empty .date { color: #cbd5e1; font-weight: 400; }
+
+    .card {
+      background: var(--card); border-radius: var(--radius);
+      padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .card h3 { font-size: 0.92rem; margin-bottom: 10px; color: var(--primary); }
+    label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px; color: var(--text); }
+    input[type="text"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
+      width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+      border-radius: 10px; font-size: 0.92rem; font-family: inherit;
+      background: #f8fafc; margin-bottom: 10px;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); background: white; }
+    textarea { min-height: 100px; resize: vertical; line-height: 1.55; }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; padding: 12px 18px; border: none; border-radius: 12px;
+      font-size: 0.95rem; font-weight: 600; font-family: inherit; cursor: pointer;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-accent { background: var(--accent); color: white; }
+    .btn-outline { background: white; color: var(--primary); border: 1.5px solid var(--primary); }
+    .btn-ghost { background: #f1f5f9; color: var(--text); }
+    .btn-sm { width: auto; padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; }
+    .btn-row { display: flex; gap: 8px; margin-top: 6px; }
+    .btn-row .btn { flex: 1; }
+    .hint { font-size: 0.73rem; color: var(--muted); margin-top: -4px; margin-bottom: 10px; }
+
+    .fab {
+      position: fixed; right: 16px; bottom: calc(78px + var(--safe-bottom));
+      width: 50px; height: 50px; border-radius: 50%;
+      background: var(--primary); color: white; border: none;
+      font-size: 1.4rem; box-shadow: 0 4px 14px rgba(30,58,95,0.35);
+      cursor: pointer; z-index: 50; display: none;
+      align-items: center; justify-content: center;
+    }
+    .fab:active { transform: scale(0.92); }
+
+    .plan-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px; background: #f8fafc; border-radius: 10px;
+      margin-bottom: 8px; border: 1.5px solid var(--border);
+    }
+    .plan-item.active-plan { border-color: var(--primary); background: #eef2ff; }
+    .plan-item .plan-name { flex: 1; font-weight: 600; font-size: 0.95rem; }
+    .plan-item .plan-count { font-size: 0.75rem; color: var(--muted); }
+
+    .install-banner {
+      background: linear-gradient(135deg, #312e81, #1e3a5f);
+      color: white; border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 14px;
+      display: none;
+    }
+    .install-banner.show { display: block; }
+    .install-banner p { font-size: 0.85rem; margin-bottom: 10px; line-height: 1.5; }
+    .install-banner .btn { background: white; color: var(--primary); }
+
+    .notif-status {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 12px; border-radius: 10px; font-size: 0.85rem; margin-bottom: 10px;
+    }
+    .notif-status.granted { background: #dcfce7; color: #166534; }
+    .notif-status.denied { background: #fee2e2; color: #991b1b; }
+    .notif-status.default { background: #fef3c7; color: #92400e; }
+
+    .progress-wrap { margin-top: 10px; }
+    .progress-row { margin-bottom: 10px; }
+    .progress-row:last-child { margin-bottom: 0; }
+    .progress-label {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 0.78rem; margin-bottom: 4px; opacity: 0.95;
+    }
+    .progress-label .pl-title { font-weight: 600; }
+    .progress-label .pl-num { font-variant-numeric: tabular-nums; opacity: 0.9; }
+    .progress-bar {
+      height: 10px; background: rgba(255,255,255,0.25); border-radius: 999px; overflow: hidden;
+    }
+    .progress-bar > i {
+      display: block; height: 100%; border-radius: 999px;
+      background: linear-gradient(90deg, #fbbf24, #f59e0b);
+      transition: width 0.35s ease;
+    }
+    .progress-bar.learn > i { background: linear-gradient(90deg, #34d399, #10b981); }
+    .progress-bar.review > i { background: linear-gradient(90deg, #fb923c, #ea580c); }
+
+    .global-stats {
+      background: var(--card); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .global-stats h3 {
+      font-size: 0.85rem; color: var(--primary); margin-bottom: 10px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .badge-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 20px; height: 18px; padding: 0 6px;
+      background: var(--accent); color: white; border-radius: 999px;
+      font-size: 0.7rem; font-weight: 700; line-height: 1;
+    }
+    .badge-num.zero { background: #94a3b8; }
+    .badge-num.green { background: var(--success); }
+    .nav-badge {
+      position: absolute; top: 0; right: 6px;
+      min-width: 16px; height: 16px; padding: 0 4px;
+      background: #ef4444; color: white; border-radius: 999px;
+      font-size: 0.65rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+    .nav-badge.hide { display: none; }
+
+    .plan-badges {
+      display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
+    }
+    .mini-badge {
+      font-size: 0.68rem; padding: 1px 7px; border-radius: 999px;
+      font-weight: 600;
+    }
+    .mini-badge.learn { background: #dcfce7; color: #166534; }
+    .mini-badge.review { background: #ffedd5; color: #9a3412; }
+    .mini-badge.done { background: #e0e7ff; color: #3730a3; }
+
+    .study-time-row {
+      display: flex; align-items: center; gap: 8px;
+      margin-top: 8px; flex-wrap: wrap;
+    }
+    .study-time-row label { margin: 0; font-size: 0.72rem; color: var(--muted); }
+    .study-time-input {
+      width: 72px !important; margin: 0 !important; padding: 5px 8px !important;
+      font-size: 0.8rem !important; text-align: center;
+    }
+    .study-time-total {
+      font-size: 0.72rem; color: var(--muted); margin-left: auto;
+    }
+    .study-time-total strong { color: var(--primary); }
+
+    .task-time {
+      font-size: 0.7rem; color: var(--muted); margin-top: 2px;
+    }
+
+    /* Einheitlich klickbare Übersichtskarten */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .summary-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 14px 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s, background 0.15s;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      min-height: 78px;
+    }
+    .summary-card:active { transform: scale(0.97); }
+    .summary-card.active {
+      border-color: var(--primary);
+      background: #eef2ff;
+      box-shadow: 0 0 0 2px rgba(30,58,95,0.12);
+    }
+    .summary-card .sc-title {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .summary-card .sc-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .summary-card .sc-num {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .summary-card .sc-num.accent { color: var(--accent); }
+    .summary-card .sc-num.success { color: var(--success); }
+    .summary-card .sc-hint {
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+    .summary-card.learn-type { border-left: 4px solid #10b981; }
+    .summary-card.review-type { border-left: 4px solid #ea580c; }
+    .summary-card.global-type { border-left: 4px solid #6366f1; }
+
+    .filter-bar {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      background: #eef2ff;
+      border-radius: 12px;
+      border: 1px solid #c7d2fe;
+    }
+    .filter-bar.show { display: flex; }
+    .filter-bar .fb-title {
+      flex: 1;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+    .filter-bar .btn { width: auto; }
+
+    .plan-name-tag {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      font-size: 0.68rem;
+      padding: 1px 7px;
+      border-radius: 999px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <h1>🧠</h1>
+    <select class="plan-select" id="planSelect" onchange="switchPlan(this.value)"><option value="mvqqjv82cmtm" selected="">Deutsch-Plan (0)</option></select>
+    <button class="icon-btn" onclick="switchPage('plans')" title="Pläne verwalten">📁</button>
+  </div>
+
+  <!-- Heute -->
+  <div class="page active" id="page-today">
+    <div class="install-banner" id="installBanner">
+      <p>📌 Empfohlen: «Zum Home-Bildschirm hinzufügen», um es wie eine App zu nutzen. Check-ins sind bequemer und Erinnerungen funktionieren besser.</p>
+      <button class="btn" onclick="showInstallGuide()">Anleitung anzeigen</button>
+    </div>
+
+    <div class="global-stats">
+      <h3>📊 Übersicht <span style="font-weight:400;font-size:0.75rem;color:var(--muted);">Details anzeigen</span></h3>
+      <div class="summary-grid" id="summaryGrid">
+        <div class="summary-card learn-type" data-filter="plan-learn" onclick="setTodayFilter('plan-learn')">
+          <div class="sc-title">Aktueller Plan · Heute zu lernen</div>
+          <div class="sc-row">
+            <span class="sc-num success" id="sumPlanLearn">0</span>
+            <span class="sc-hint">Offen</span>
+          </div>
+        </div>
+        <div class="summary-card review-type" data-filter="plan-review" onclick="setTodayFilter('plan-review')">
+          <div class="sc-title">Aktueller Plan · Heute zu wiederholen</div>
+          <div class="sc-row">
+            <span class="sc-num accent" id="sumPlanReview">0</span>
+            <span class="sc-hint">Offen</span>
+          </div>
+        </div>
+        <div class="summary-card global-type learn-type" data-filter="all-learn" onclick="setTodayFilter('all-learn')">
+          <div class="sc-title">Alle Pläne · Heute zu lernen</div>
+          <div class="sc-row">
+            <span class="sc-num success" id="sumAllLearn">0</span>
+            <span class="sc-hint">Über Pläne</span>
+          </div>
+        </div>
+        <div class="summary-card global-type review-type" data-filter="all-review" onclick="setTodayFilter('all-review')">
+          <div class="sc-title">Alle Pläne · Heute zu wiederholen</div>
+          <div class="sc-row">
+            <span class="sc-num accent" id="sumAllReview">0</span>
+            <span class="sc-hint">Über Pläne</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="filter-bar" id="todayFilterBar">
+      <span class="fb-title" id="todayFilterTitle">Filter aktiv</span>
+      <button class="btn btn-ghost btn-sm" onclick="setTodayFilter(null)">Filter löschen</button>
+    </div>
+
+    <div class="today-header" id="todayHeaderBlock">
+      <div class="label">Heutige Aufgaben · Aktueller Plan</div>
+      <div class="count" id="todayCount">0 Elemente</div>
+      <div class="sub" id="todayProgress">Erledigt 0 / 0</div>
+      <div class="progress-wrap">
+        <div class="progress-row">
+          <div class="progress-label">
+            <span class="pl-title">Zu lernen (erstmals)</span>
+            <span class="pl-num" id="pLearnNum">0 / 0</span>
+          </div>
+          <div class="progress-bar learn"><i id="pLearnBar" style="width:0%"></i></div>
+        </div>
+        <div class="progress-row">
+          <div class="progress-label">
+            <span class="pl-title">Zu wiederholen</span>
+            <span class="pl-num" id="pReviewNum">0 / 0</span>
+          </div>
+          <div class="progress-bar review"><i id="pReviewBar" style="width:0%"></i></div>
+        </div>
+      </div>
+      <div class="plan-tag" id="todayPlanName">Deutsch-Plan</div>
+    </div>
+    <div id="todayList"><div class="empty-state"><div class="emoji">🎉</div><div>Heute hat «Deutsch-Plan» keine Aufgaben</div><div style="font-size:0.82rem;margin-top:6px;">Gehe zur Seite «Inhalt», um Einträge hinzuzufügen oder Daten zu setzen</div></div></div>
+  </div>
+
+  <!-- PläneInhalt -->
+  <div class="page" id="page-plan">
+    <div class="stats-grid" id="statsGrid"><div class="stat-box"><div class="num">0</div><div class="lbl">Gesamtinhalte</div></div><div class="stat-box clickable" onclick="setPlanFilter('learned')"><div class="num success">0</div><div class="lbl">Gelernt</div></div><div class="stat-box clickable" onclick="setPlanFilter('pendingLearn')"><div class="num accent">0</div><div class="lbl">Zu lernen</div></div><div class="stat-box clickable" onclick="setPlanFilter('pendingReview')"><div class="num accent">0</div><div class="lbl">Heute zu wiederholen</div></div><div class="stat-box"><div class="num">0</div><div class="lbl">Anzahl der Check-ins</div></div><div class="stat-box clickable" onclick="setPlanFilter('todayLeft')"><div class="num">0</div><div class="lbl">Heute verbleibend</div></div><div class="stat-box" style="grid-column: span 2;"><div class="num" style="font-size:1.05rem;">0 Minuten</div><div class="lbl">Gesamte Lernzeit dieses Plans</div></div></div>
+    <div class="filter-bar" id="planFilterBar">
+      <span class="fb-title" id="planFilterTitle">Filter aktiv</span>
+      <button class="btn btn-ghost btn-sm" onclick="setPlanFilter(null)">Filter löschen</button>
+    </div>
+    <div class="section-title">
+      <span id="planListTitle">Alle Inhalte</span>
+      <button class="btn btn-ghost btn-sm" onclick="addNewItem()">+ Hinzufügen</button>
+    </div>
+    <div id="planList"><div class="empty-state"><div class="emoji">📝</div><div>「Deutsch-Plan» hat noch keinen Inhalt</div><div style="font-size:0.82rem;margin-top:6px;">Tippe unten rechts auf + zum Hinzufügen oder gehe zu den Einstellungen für den Masseneimport</div></div></div>
+  </div>
+
+  <!-- Pläne verwalten -->
+  <div class="page" id="page-plans">
+    <div class="card">
+      <h3>📁 Meine Pläne</h3>
+      <div id="plansList"><div class="plan-item active-plan"><div style="flex:1;min-width:0;" onclick="switchPlan('mvqqjv82cmtm')"><div class="plan-name">Deutsch-Plan · aktuell</div><div class="plan-count">0 Inhalte · gesamt 0 Minuten</div><div class="plan-badges"><span class="mini-badge done">Heute zurückgesetzt</span></div></div><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();renamePlan('mvqqjv82cmtm')">Umbenennen</button></div></div>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="createPlan()">+ Neuer Plan</button>
+    </div>
+    <div class="card">
+      <h3>💡 Nutzungstipps</h3>
+      <p style="font-size:0.85rem;color:var(--muted);line-height:1.6;">
+        Du kannst für verschiedene Fächer eigene Pläne erstellen, z. B. «Deutsch», «Englisch», «Politik für die Aufnahmeprüfung». Inhalt, Daten und Check-in-Fortschritt sind pro Plan komplett getrennt.
+      </p>
+    </div>
+  </div>
+
+  <!-- Einstellungen -->
+  <div class="page" id="page-settings">
+    <div class="card">
+      <h3>🔔 Lern-Erinnerungen</h3>
+      <div id="notifStatus" class="notif-status default">Benachrichtigungsberechtigung: nicht angefragt</div>
+      <label>Erinnerungszeit des aktuellen Plans</label>
+      <input type="time" id="remindTime" value="20:00">
+      <div class="hint">Jeder Plan kann eine eigene Erinnerungszeit haben. Zur eingestellten Zeit öffnet die App und erinnert jeweils pro Plan (Benachrichtigungen müssen erlaubt sein).</div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="enableNotifications()">Benachrichtigungen erlauben</button>
+        <button class="btn btn-outline" onclick="testNotification()">Erinnerung testen</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📋 Masseneinfuhr in den aktuellen Plan</h3>
+      <textarea id="importText" placeholder="Ein Lerninhalt pro Zeile"></textarea>
+      <div class="hint">Wird in den aktuell ausgewählten Plan importiert, andere Pläne bleiben unberührt.</div>
+      <button class="btn btn-primary" onclick="importItems()">Inhalt importieren</button>
+    </div>
+
+    <div class="card">
+      <h3>⚙️ Intervallschema des aktuellen Plans</h3>
+      <select id="intervalPreset">
+        <option value="classic">Klassisch: am Tag → +1 Tag → +7 Tage → +14 Tage → +1 Monat</option>
+        <option value="short">Intensiv: am Tag → +1 → +2 → +4 → +7 → +15 Tage</option>
+        <option value="balanced">Ausgewogen: am Tag → +1 → +3 → +7 → +14 → +30 Tage</option>
+      </select>
+      <button class="btn btn-outline" onclick="applyIntervalToCurrent()">Auf aktuellen Plan anwenden (Check-ins zurücksetzen)</button>
+    </div>
+
+    <div class="card">
+      <h3>🗓️ Daten mit einem Klick füllen</h3>
+      <input type="date" id="defaultStart">
+      <div class="hint">Starttermine der Reihe nach für jeden Inhalt des aktuellen Plans setzen (ein pro Tag)</div>
+      <button class="btn btn-outline" onclick="fillAllDates()">Daten des aktuellen Plans füllen</button>
+    </div>
+
+    <div class="card">
+      <h3>📱 Zum Home-Bildschirm hinzufügen</h3>
+      <p class="hint" style="margin-bottom:10px;">Danach wie eine native App im Vollbild nutzbar, mit besserer Unterstützung für Erinnerungen.</p>
+      <button class="btn btn-primary" onclick="showInstallGuide()">Anleitung anzeigen</button>
+    </div>
+
+    <div class="card">
+      <h3>💾 Datenverwaltung</h3>
+      <div class="btn-row">
+        <button class="btn btn-ghost" onclick="exportData()">Alles exportieren</button>
+        <button class="btn btn-ghost" onclick="importData()">Backup importieren</button>
+      </div>
+      <button class="btn btn-accent" style="margin-top:10px;" onclick="clearAllData()">Alle Daten löschen</button>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="nav-item active" data-page="today" onclick="switchPage('today')">
+      <span class="icon">📅</span>Heute
+      <span class="nav-badge hide" id="navTodayBadge">0</span>
+    </button>
+    <button class="nav-item" data-page="plan" onclick="switchPage('plan')">
+      <span class="icon">📋</span>Inhalt
+      <span class="nav-badge hide" id="navPlanBadge">0</span>
+    </button>
+    <button class="nav-item" data-page="plans" onclick="switchPage('plans')">
+      <span class="icon">📁</span>Pläne
+    </button>
+    <button class="nav-item" data-page="settings" onclick="switchPage('settings')">
+      <span class="icon">⚙️</span>Einstellungen
+    </button>
+  </nav>
+
+  <button class="fab" id="fabAdd" onclick="addNewItem()">＋</button>
+
+  <script>
+    const STORAGE_KEY = 'ebbinghaus_multi_v2';
+    const PRESETS = {
+      classic:  { intervals: [0,1,7,14,30], labels: ['I','II(+1d)','III(+7d)','IV(+14d)','V(+1m)'] },
+      short:    { intervals: [0,1,2,4,7,15], labels: ['I','II(+1d)','III(+2d)','IV(+4d)','V(+7d)','VI(+15d)'] },
+      balanced: { intervals: [0,1,3,7,14,30], labels: ['I','II(+1d)','III(+3d)','IV(+7d)','V(+14d)','VI(+30d)'] }
+    };
+
+    let state = {
+      plans: [],
+      activePlanId: null,
+      lastNotif: {}
+    };
+
+    // Filterstatus
+    let todayFilter = null; // null | 'plan-learn' | 'plan-review' | 'all-learn' | 'all-review'
+    let planFilter = null;  // null | 'learned' | 'pendingLearn' | 'pendingReview' | 'todayLeft'
+
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) state = JSON.parse(raw);
+      } catch(e) {}
+      if (!state.plans) state.plans = [];
+      if (!state.lastNotif) state.lastNotif = {};
+      if (state.items && !state.plans.length) {
+        state.plans = [{ id: uid(), name: 'Standardplan', items: state.items, preset: state.preset || 'classic', remindTime: state.remindTime || '20:00' }];
+        delete state.items;
+      }
+      state.plans.forEach(function(p) {
+        if (!p.remindTime) p.remindTime = '20:00';
+      });
+      if (!state.plans.length) {
+        const id = uid();
+        state.plans = [{ id: id, name: 'Deutsch-Plan', items: [], preset: 'classic', remindTime: '20:00' }];
+        state.activePlanId = id;
+      }
+      if (!state.activePlanId || !state.plans.find(p => p.id === state.activePlanId)) {
+        state.activePlanId = state.plans[0].id;
+      }
+    }
+
+    function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+
+    function activePlan() { return state.plans.find(p => p.id === state.activePlanId) || state.plans[0]; }
+
+    function todayStr() {
+      const d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function formatISO(d) {
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function formatShort(iso) {
+      if (!iso) return '—';
+      const p = iso.split('-');
+      return parseInt(p[1]) + '.' + parseInt(p[2]);
+    }
+    function addDaysISO(iso, days) {
+      const d = new Date(iso + 'T00:00:00');
+      d.setDate(d.getDate() + days);
+      return formatISO(d);
+    }
+    function getPreset(key) { return PRESETS[key] || PRESETS.classic; }
+    function escapeHtml(s) {
+      if (!s) return '';
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ===== Plans =====
+    function renderPlanSelect() {
+      const sel = document.getElementById('planSelect');
+      sel.innerHTML = state.plans.map(p =>
+        '<option value="' + p.id + '"' + (p.id === state.activePlanId ? ' selected' : '') + '>' +
+        escapeHtml(p.name) + '（' + (p.items||[]).length + '）</option>'
+      ).join('');
+    }
+
+    function switchPlan(id) {
+      state.activePlanId = id;
+      todayFilter = null;
+      planFilter = null;
+      saveState();
+      renderAll();
+    }
+
+    function createPlan() {
+      const name = prompt('Name des neuen Plans (z. B. Englisch-Plan)');
+      if (!name || !name.trim()) return;
+      const id = uid();
+      state.plans.push({ id: id, name: name.trim(), items: [], preset: 'classic', remindTime: '20:00' });
+      state.activePlanId = id;
+      planFilter = null;
+      saveState();
+      renderAll();
+      switchPage('plan');
+    }
+
+    function renamePlan(id) {
+      const plan = state.plans.find(p => p.id === id);
+      if (!plan) return;
+      const name = prompt('Plannamen ändern', plan.name);
+      if (!name || !name.trim()) return;
+      plan.name = name.trim();
+      saveState();
+      renderAll();
+    }
+
+    function deletePlan(id) {
+      if (state.plans.length <= 1) { alert('Mindestens ein Plan muss erhalten bleiben'); return; }
+      if (!confirm('Diesen Plan und alle seine Inhalte wirklich löschen?')) return;
+      state.plans = state.plans.filter(p => p.id !== id);
+      if (state.activePlanId === id) state.activePlanId = state.plans[0].id;
+      saveState();
+      renderAll();
+    }
+
+    function renderPlansPage() {
+      const list = document.getElementById('plansList');
+      list.innerHTML = state.plans.map(p => {
+        const pendingLearn = getPendingLearnCount(p);
+        const pendingReview = getPendingReviewCount(p);
+        const itemCount = (p.items || []).length;
+        let totalMin = 0;
+        (p.items || []).forEach(it => { totalMin += itemStudyMinutes(it); });
+        return '<div class="plan-item' + (p.id === state.activePlanId ? ' active-plan' : '') + '">' +
+          '<div style="flex:1;min-width:0;" onclick="switchPlan(\'' + p.id + '\')">' +
+            '<div class="plan-name">' + escapeHtml(p.name) + (p.id === state.activePlanId ? ' · aktuell' : '') + '</div>' +
+            '<div class="plan-count">' + itemCount + ' Inhalte · gesamt ' + formatMinutes(totalMin) + '</div>' +
+            '<div class="plan-badges">' +
+              (pendingLearn ? '<span class="mini-badge learn">Zu lernen ' + pendingLearn + '</span>' : '') +
+              (pendingReview ? '<span class="mini-badge review">Heute zu wiederholen ' + pendingReview + '</span>' : '') +
+              (!pendingLearn && !pendingReview ? '<span class="mini-badge done">Heute zurückgesetzt</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();renamePlan(\'' + p.id + '\')">Umbenennen</button>' +
+          (state.plans.length > 1 ? '<button class="btn btn-ghost btn-sm" style="color:#ef4444;" onclick="event.stopPropagation();deletePlan(\'' + p.id + '\')">Löschen</button>' : '') +
+        '</div>';
+      }).join('');
+    }
+
+    // ===== Today tasks =====
+    function getTodayTasks(plan) {
+      const today = todayStr();
+      const tasks = [];
+      (plan.items || []).forEach(item => {
+        if (!item.startDate) return;
+        const preset = getPreset(item.preset || plan.preset);
+        preset.intervals.forEach((offset, idx) => {
+          if (addDaysISO(item.startDate, offset) === today) {
+            tasks.push({
+              itemId: item.id, stageIdx: idx, name: item.name,
+              stageLabel: preset.labels[idx], isFirst: idx === 0,
+              done: !!(item.checks && item.checks[idx]),
+              planId: plan.id,
+              planName: plan.name
+            });
+          }
+        });
+      });
+      tasks.sort((a,b) => a.done === b.done ? 0 : a.done ? 1 : -1);
+      return tasks;
+    }
+
+    function getAllTodayTasks() {
+      let all = [];
+      state.plans.forEach(p => {
+        all = all.concat(getTodayTasks(p));
+      });
+      all.sort((a,b) => a.done === b.done ? 0 : a.done ? 1 : -1);
+      return all;
+    }
+
+    // ===== Progress & study time helpers =====
+    function isItemLearned(item) {
+      return !!(item.checks && item.checks[0]);
+    }
+    function getPendingLearnCount(plan) {
+      let n = 0;
+      (plan.items || []).forEach(item => {
+        if (!item.startDate || !isItemLearned(item)) n++;
+      });
+      return n;
+    }
+    function getPendingReviewCount(plan) {
+      return getTodayTasks(plan).filter(t => !t.isFirst && !t.done).length;
+    }
+    function getTodayLearnCount(plan) {
+      return getTodayTasks(plan).filter(t => t.isFirst).length;
+    }
+    function getTodayLearnDone(plan) {
+      return getTodayTasks(plan).filter(t => t.isFirst && t.done).length;
+    }
+    function getTodayReviewCount(plan) {
+      return getTodayTasks(plan).filter(t => !t.isFirst).length;
+    }
+    function getTodayReviewDone(plan) {
+      return getTodayTasks(plan).filter(t => !t.isFirst && t.done).length;
+    }
+    /** Aktueller Plan：Heute zu lernenoffene Anzahl (erstmals und offen) */
+    function getPlanTodayLearnLeft(plan) {
+      return getTodayTasks(plan).filter(t => t.isFirst && !t.done).length;
+    }
+    /** Aktueller Plan：Heute zu wiederholenoffene Anzahl */
+    function getPlanTodayReviewLeft(plan) {
+      return getTodayTasks(plan).filter(t => !t.isFirst && !t.done).length;
+    }
+    function formatMinutes(m) {
+      m = Number(m) || 0;
+      if (m < 60) return m + ' Minuten';
+      const h = Math.floor(m / 60), r = m % 60;
+      return r ? h + ' Stunden ' + r + ' Min' : h + ' Stunden';
+    }
+    function itemStudyMinutes(item) {
+      return Number(item.studyMinutes) || 0;
+    }
+    function updateStudyMinutes(itemId, val) {
+      const item = (activePlan().items || []).find(i => i.id === itemId);
+      if (!item) return;
+      let n = parseInt(val, 10);
+      if (isNaN(n) || n < 0) n = 0;
+      item.studyMinutes = n;
+      saveState();
+      renderAll();
+    }
+    function pct(done, total) {
+      if (!total) return 0;
+      return Math.min(100, Math.round(done / total * 100));
+    }
+    function setBar(id, done, total) {
+      const el = document.getElementById(id);
+      if (el) el.style.width = pct(done, total) + '%';
+    }
+    function setText(id, text) {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    }
+
+    function updateNavBadges() {
+      // Heute-Seite: Gesamtzahl offener Aufgaben aller Pläne heute
+      let todayLeftAll = 0;
+      state.plans.forEach(p => {
+        todayLeftAll += getTodayTasks(p).filter(t => !t.done).length;
+      });
+      // Inhalt-Seite: nur aktueller Plan, heute zu lernen + heute zu wiederholen offene Anzahl
+      const plan = activePlan();
+      const planLeft = getPlanTodayLearnLeft(plan) + getPlanTodayReviewLeft(plan);
+
+      const tb = document.getElementById('navTodayBadge');
+      const pb = document.getElementById('navPlanBadge');
+      if (tb) {
+        if (todayLeftAll > 0) { tb.textContent = todayLeftAll > 99 ? '99+' : todayLeftAll; tb.classList.remove('hide'); }
+        else tb.classList.add('hide');
+      }
+      if (pb) {
+        if (planLeft > 0) { pb.textContent = planLeft > 99 ? '99+' : planLeft; pb.classList.remove('hide'); }
+        else pb.classList.add('hide');
+      }
+    }
+
+    // ===== Heute-Filter =====
+    function setTodayFilter(filter) {
+      if (todayFilter === filter) todayFilter = null;
+      else todayFilter = filter;
+      renderToday();
+    }
+
+    function updateSummaryCards() {
+      const plan = activePlan();
+      const planLearnLeft = getPlanTodayLearnLeft(plan);
+      const planReviewLeft = getPlanTodayReviewLeft(plan);
+
+      let allLearnLeft = 0, allReviewLeft = 0;
+      state.plans.forEach(p => {
+        allLearnLeft += getPlanTodayLearnLeft(p);
+        allReviewLeft += getPlanTodayReviewLeft(p);
+      });
+
+      setText('sumPlanLearn', planLearnLeft);
+      setText('sumPlanReview', planReviewLeft);
+      setText('sumAllLearn', allLearnLeft);
+      setText('sumAllReview', allReviewLeft);
+
+      document.querySelectorAll('#summaryGrid .summary-card').forEach(card => {
+        const f = card.getAttribute('data-filter');
+        if (f === todayFilter) card.classList.add('active');
+        else card.classList.remove('active');
+      });
+    }
+
+    function renderToday() {
+      const plan = activePlan();
+      updateSummaryCards();
+      updateNavBadges();
+
+      const bar = document.getElementById('todayFilterBar');
+      const header = document.getElementById('todayHeaderBlock');
+      const titleMap = {
+        'plan-learn': 'Aktueller Plan · Heute zu lernen',
+        'plan-review': 'Aktueller Plan · Heute zu wiederholen',
+        'all-learn': 'Alle Pläne · Heute zu lernen',
+        'all-review': 'Alle Pläne · Heute zu wiederholen'
+      };
+
+      let tasks = [];
+      let showPlanTag = false;
+
+      if (!todayFilter) {
+        bar.classList.remove('show');
+        header.style.display = '';
+        tasks = getTodayTasks(plan);
+        const done = tasks.filter(t => t.done).length;
+        document.getElementById('todayCount').textContent = tasks.length + ' Elemente';
+        document.getElementById('todayProgress').textContent = 'Erledigt ' + done + ' / ' + tasks.length;
+        document.getElementById('todayPlanName').textContent = plan.name;
+
+        const learnTotal = getTodayLearnCount(plan);
+        const learnDone = getTodayLearnDone(plan);
+        const reviewTotal = getTodayReviewCount(plan);
+        const reviewDone = getTodayReviewDone(plan);
+        setText('pLearnNum', learnDone + ' / ' + learnTotal + (learnTotal ? '(noch  ' + (learnTotal - learnDone) + '）' : ''));
+        setBar('pLearnBar', learnDone, learnTotal);
+        setText('pReviewNum', reviewDone + ' / ' + reviewTotal + (reviewTotal ? '(noch  ' + (reviewTotal - reviewDone) + '）' : ''));
+        setBar('pReviewBar', reviewDone, reviewTotal);
+      } else {
+        bar.classList.add('show');
+        document.getElementById('todayFilterTitle').textContent = titleMap[todayFilter] || 'Filter';
+        header.style.display = 'none';
+
+        if (todayFilter === 'plan-learn') {
+          tasks = getTodayTasks(plan).filter(t => t.isFirst);
+        } else if (todayFilter === 'plan-review') {
+          tasks = getTodayTasks(plan).filter(t => !t.isFirst);
+        } else if (todayFilter === 'all-learn') {
+          tasks = getAllTodayTasks().filter(t => t.isFirst);
+          showPlanTag = true;
+        } else if (todayFilter === 'all-review') {
+          tasks = getAllTodayTasks().filter(t => !t.isFirst);
+          showPlanTag = true;
+        }
+      }
+
+      const list = document.getElementById('todayList');
+      if (!tasks.length) {
+        const emptyMsg = todayFilter
+          ? 'Keine Einträge unter diesem Filter'
+          : ('Heute «' + escapeHtml(plan.name) + '» hat keine Aufgaben');
+        list.innerHTML = '<div class="empty-state"><div class="emoji">🎉</div><div>' + emptyMsg + '</div>' +
+          (!todayFilter ? '<div style="font-size:0.82rem;margin-top:6px;">Gehe zur Seite «Inhalt», um Einträge hinzuzufügen oder Daten zu setzen</div>' : '') +
+          '</div>';
+        return;
+      }
+
+      // Item-Suche aufbauen (über Pläne)
+      const itemLookup = {};
+      state.plans.forEach(p => {
+        (p.items || []).forEach(it => { itemLookup[it.id] = it; });
+      });
+
+      list.innerHTML = tasks.map(t => {
+        const mins = itemStudyMinutes(itemLookup[t.itemId] || {});
+        const planTag = showPlanTag
+          ? '<span class="plan-name-tag">' + escapeHtml(t.planName || '') + '</span>'
+          : '';
+        return '<div class="task-card' + (t.done ? ' done' : '') + '">' +
+          '<button class="check-btn' + (t.done ? ' checked' : '') + '" onclick="toggleCheck(\'' + t.itemId + '\',' + t.stageIdx + ',event,\'' + (t.planId || '') + '\')">' + (t.done ? '✓' : '') + '</button>' +
+          '<div class="task-info">' +
+            '<div class="task-title">' + planTag + escapeHtml(t.name || 'Unbenannt') + '</div>' +
+            '<div class="task-meta"><span class="task-stage ' + (t.isFirst ? 'stage-I' : 'stage-review') + '">' + t.stageLabel + '</span>' + (t.isFirst ? 'Erstes Lernen' : 'Wiederholung') + '</div>' +
+            (mins ? '<div class="task-time">Gesamte Lernzeit ' + formatMinutes(mins) + '</div>' : '') +
+          '</div></div>';
+      }).join('');
+    }
+
+    // ===== Inhalt-Seiten-Filter =====
+    function setPlanFilter(filter) {
+      if (planFilter === filter) planFilter = null;
+      else planFilter = filter;
+      renderPlanContent();
+    }
+
+    function renderPlanContent() {
+      const plan = activePlan();
+      const items = plan.items || [];
+      let doneStages = 0;
+      let totalStudy = 0;
+      items.forEach(it => {
+        if (it.checks) doneStages += it.checks.filter(Boolean).length;
+        totalStudy += itemStudyMinutes(it);
+      });
+      const todayTasks = getTodayTasks(plan);
+      const todayLeft = todayTasks.filter(t => !t.done).length;
+      const pendingLearn = getPendingLearnCount(plan);
+      const pendingReview = getPendingReviewCount(plan);
+      const learned = items.length - pendingLearn;
+
+      const activeCls = function(f) {
+        return planFilter === f ? ' active-filter' : '';
+      };
+
+      document.getElementById('statsGrid').innerHTML =
+        '<div class="stat-box"><div class="num">' + items.length + '</div><div class="lbl">Gesamtinhalte</div></div>' +
+        '<div class="stat-box clickable' + activeCls('learned') + '" onclick="setPlanFilter(\'learned\')"><div class="num success">' + learned + '</div><div class="lbl">Gelernt</div></div>' +
+        '<div class="stat-box clickable' + activeCls('pendingLearn') + '" onclick="setPlanFilter(\'pendingLearn\')"><div class="num accent">' + pendingLearn + '</div><div class="lbl">Zu lernen</div></div>' +
+        '<div class="stat-box clickable' + activeCls('pendingReview') + '" onclick="setPlanFilter(\'pendingReview\')"><div class="num accent">' + pendingReview + '</div><div class="lbl">Heute zu wiederholen</div></div>' +
+        '<div class="stat-box"><div class="num">' + doneStages + '</div><div class="lbl">Anzahl der Check-ins</div></div>' +
+        '<div class="stat-box clickable' + activeCls('todayLeft') + '" onclick="setPlanFilter(\'todayLeft\')"><div class="num">' + todayLeft + '</div><div class="lbl">Heute verbleibend</div></div>' +
+        '<div class="stat-box" style="grid-column: span 2;"><div class="num" style="font-size:1.05rem;">' + formatMinutes(totalStudy) + '</div><div class="lbl">Gesamte Lernzeit dieses Plans</div></div>';
+
+      updateNavBadges();
+
+      const bar = document.getElementById('planFilterBar');
+      const titleMap = {
+        learned: 'Gelernt',
+        pendingLearn: 'Zu lernen',
+        pendingReview: 'Heute zu wiederholen',
+        todayLeft: 'Heute verbleibend'
+      };
+      if (planFilter) {
+        bar.classList.add('show');
+        document.getElementById('planFilterTitle').textContent = 'Filter: ' + (titleMap[planFilter] || '');
+        document.getElementById('planListTitle').textContent = titleMap[planFilter] || 'Alle Inhalte';
+      } else {
+        bar.classList.remove('show');
+        document.getElementById('planListTitle').textContent = 'Alle Inhalte';
+      }
+
+      // Items filtern
+      let displayItems = items.slice();
+      if (planFilter === 'learned') {
+        displayItems = items.filter(it => it.startDate && isItemLearned(it));
+      } else if (planFilter === 'pendingLearn') {
+        displayItems = items.filter(it => !it.startDate || !isItemLearned(it));
+      } else if (planFilter === 'pendingReview') {
+        const reviewIds = new Set(todayTasks.filter(t => !t.isFirst && !t.done).map(t => t.itemId));
+        displayItems = items.filter(it => reviewIds.has(it.id));
+      } else if (planFilter === 'todayLeft') {
+        const leftIds = new Set(todayTasks.filter(t => !t.done).map(t => t.itemId));
+        displayItems = items.filter(it => leftIds.has(it.id));
+      }
+
+      const list = document.getElementById('planList');
+      if (!displayItems.length) {
+        const emptyMsg = planFilter
+          ? 'Keine Einträge unter diesem Filter'
+          : ('「' + escapeHtml(plan.name) + '» hat noch keinen Inhalt');
+        list.innerHTML = '<div class="empty-state"><div class="emoji">📝</div><div>' + emptyMsg + '</div>' +
+          (!planFilter ? '<div style="font-size:0.82rem;margin-top:6px;">Tippe unten rechts auf + zum Hinzufügen oder gehe zu den Einstellungen für den Masseneimport</div>' : '') +
+          '</div>';
+        return;
+      }
+
+      const today = todayStr();
+      list.innerHTML = displayItems.map(item => {
+        const preset = getPreset(item.preset || plan.preset);
+        const chips = preset.intervals.map((offset, idx) => {
+          const due = item.startDate ? addDaysISO(item.startDate, offset) : null;
+          const done = !!(item.checks && item.checks[idx]);
+          let cls = 'stage-chip';
+          if (!due) cls += ' empty';
+          else if (done) cls += ' done';
+          else if (due === today) cls += ' today';
+          return '<div class="' + cls + '" onclick="toggleCheck(\'' + item.id + '\',' + idx + ')">' +
+            '<span class="label">' + preset.labels[idx] + '</span>' +
+            '<span class="date">' + (due ? formatShort(due) : '—') + '</span></div>';
+        }).join('');
+        const mins = itemStudyMinutes(item);
+        const learnTag = (!item.startDate || !isItemLearned(item))
+          ? '<span class="mini-badge learn">Zu lernen</span>'
+          : '<span class="mini-badge done">Gelernt</span>';
+        return '<div class="table-card item-row">' +
+          '<div class="item-name">' +
+            '<input value="' + escapeHtml(item.name) + '" placeholder="Inhaltsname" onchange="updateName(\'' + item.id + '\',this.value)" onblur="updateName(\'' + item.id + '\',this.value)">' +
+            learnTag +
+            '<button class="btn btn-ghost btn-sm" onclick="setStartDate(\'' + item.id + '\')">' + (item.startDate ? formatShort(item.startDate) : 'Datum setzen') + '</button>' +
+            '<button class="btn btn-ghost btn-sm" style="color:#ef4444;padding:4px 6px;" onclick="deleteItem(\'' + item.id + '\')">×</button>' +
+          '</div><div class="stages">' + chips + '</div>' +
+          '<div class="study-time-row">' +
+            '<label>Lernzeit (Minuten)</label>' +
+            '<input class="study-time-input" type="number" min="0" step="1" value="' + mins + '" onchange="updateStudyMinutes(\'' + item.id + '\',this.value)" onblur="updateStudyMinutes(\'' + item.id + '\',this.value)">' +
+            '<span class="study-time-total">Gesamt <strong>' + formatMinutes(mins) + '</strong></span>' +
+          '</div></div>';
+      }).join('');
+    }
+
+    // ===== Actions =====
+    function toggleCheck(itemId, stageIdx, ev, planId) {
+      if (ev) ev.stopPropagation();
+      let plan = planId ? state.plans.find(p => p.id === planId) : activePlan();
+      if (!plan) plan = activePlan();
+      const item = (plan.items || []).find(i => i.id === itemId);
+      if (!item) return;
+      const preset = getPreset(item.preset || plan.preset);
+      if (!item.checks) item.checks = [];
+      while (item.checks.length < preset.intervals.length) item.checks.push(false);
+      item.checks[stageIdx] = !item.checks[stageIdx];
+      saveState();
+      renderAll();
+    }
+
+    function updateName(itemId, name) {
+      const item = (activePlan().items || []).find(i => i.id === itemId);
+      if (item) { item.name = name.trim(); saveState(); }
+    }
+
+    function setStartDate(itemId) {
+      const item = (activePlan().items || []).find(i => i.id === itemId);
+      if (!item) return;
+      const cur = item.startDate || todayStr();
+      const input = prompt('Startdatum (2025-08-30 oder 8.30)', cur);
+      if (input === null) return;
+      let iso = null;
+      const t = input.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(t)) iso = t;
+      else {
+        const m = t.match(/^(\d{1,2})[./\-](\d{1,2})$/);
+        if (m) iso = new Date().getFullYear() + '-' + m[1].padStart(2,'0') + '-' + m[2].padStart(2,'0');
+      }
+      if (!iso) { alert('Datumsformat ist falsch'); return; }
+      item.startDate = iso;
+      saveState();
+      renderAll();
+    }
+
+    function deleteItem(itemId) {
+      if (!confirm('Diesen Eintrag löschen?')) return;
+      const plan = activePlan();
+      plan.items = (plan.items || []).filter(i => i.id !== itemId);
+      saveState();
+      renderAll();
+    }
+
+    function addNewItem() {
+      const name = prompt('Name des Lerninhalts');
+      if (name === null) return;
+      const plan = activePlan();
+      const preset = getPreset(plan.preset);
+      if (!plan.items) plan.items = [];
+      plan.items.push({
+        id: uid(), name: name.trim() || 'Neuer Inhalt', startDate: null,
+        checks: new Array(preset.intervals.length).fill(false), preset: plan.preset, studyMinutes: 0
+      });
+      saveState();
+      switchPage('plan');
+      renderAll();
+    }
+
+    function importItems() {
+      const text = document.getElementById('importText').value.trim();
+      if (!text) { alert('Bitte zuerst Inhalt eingeben'); return; }
+      const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+      const plan = activePlan();
+      const preset = getPreset(plan.preset);
+      if (!plan.items) plan.items = [];
+      lines.forEach(name => {
+        plan.items.push({
+          id: uid(), name, startDate: null,
+          checks: new Array(preset.intervals.length).fill(false), preset: plan.preset, studyMinutes: 0
+        });
+      });
+      document.getElementById('importText').value = '';
+      saveState();
+      alert('Importiert ' + lines.length + ' Einträge zu «' + plan.name + '」');
+      switchPage('plan');
+      renderAll();
+    }
+
+    function fillAllDates() {
+      const startInput = document.getElementById('defaultStart').value;
+      if (!startInput) { alert('Bitte Startdatum wählen'); return; }
+      if (!confirm('Alle Starttermine des aktuellen Plans werden der Reihe nach überschrieben. Fortfahren?')) return;
+      let d = new Date(startInput + 'T00:00:00');
+      (activePlan().items || []).forEach(item => {
+        item.startDate = formatISO(d);
+        d.setDate(d.getDate() + 1);
+      });
+      saveState();
+      renderAll();
+      alert('Gefüllt');
+    }
+
+    function applyIntervalToCurrent() {
+      const key = document.getElementById('intervalPreset').value;
+      if (!confirm('Alle Check-in-Einträge des aktuellen Plans werden zurückgesetzt. Fortfahren?')) return;
+      const plan = activePlan();
+      plan.preset = key;
+      const preset = getPreset(key);
+      (plan.items || []).forEach(item => {
+        item.preset = key;
+        item.checks = new Array(preset.intervals.length).fill(false);
+      });
+      saveState();
+      renderAll();
+      alert('Angewendet');
+    }
+
+    // ===== Notifications =====
+    function updateNotifStatus() {
+      const el = document.getElementById('notifStatus');
+      if (!('Notification' in window)) {
+        el.className = 'notif-status denied';
+        el.textContent = 'Dieser Browser unterstützt keine Benachrichtigungen';
+        return;
+      }
+      const perm = Notification.permission;
+      if (perm === 'granted') {
+        el.className = 'notif-status granted';
+        el.textContent = 'Benachrichtigungsberechtigung: aktiviert ✓';
+      } else if (perm === 'denied') {
+        el.className = 'notif-status denied';
+        el.textContent = 'Benachrichtigungsberechtigung: abgelehnt (bitte in den Systemeinstellungen aktivieren)';
+      } else {
+        el.className = 'notif-status default';
+        el.textContent = 'Benachrichtigungsberechtigung: noch nicht aktiviert';
+      }
+    }
+
+    function enableNotifications() {
+      if (!('Notification' in window)) { alert('Dieser Browser unterstützt keine Benachrichtigungen'); return; }
+      Notification.requestPermission().then(perm => {
+        updateNotifStatus();
+        if (perm === 'granted') {
+          alert('Benachrichtigungen aktiviert! Zur Erinnerungszeit öffnet die App und zeigt die heutigen Wiederholungen.');
+          checkAndNotify();
+        } else {
+          alert('Benachrichtigungen müssen erlaubt sein, um Erinnerungen zu erhalten');
+        }
+      });
+    }
+
+    function testNotification() {
+      if (!('Notification' in window) || Notification.permission !== 'granted') {
+        alert('Bitte zuerst Benachrichtigungen erlauben');
+        return;
+      }
+      const plan = activePlan();
+      const tasks = getTodayTasks(plan);
+      const left = tasks.filter(t => !t.done).length;
+      new Notification('Ebbinghaus-Check-in · Test', {
+        body: left > 0
+          ? '「' + plan.name + '» hat heute noch ' + left + ' ElementeZu wiederholen'
+          : '「' + plan.name + '» heute komplett erledigt 🎉',
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="80">🧠</text></svg>',
+        tag: 'ebbinghaus-test'
+      });
+    }
+
+    function checkAndNotify() {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      const now = new Date();
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+      const today = todayStr();
+      if (!state.lastNotif) state.lastNotif = {};
+
+      state.plans.forEach(function(plan) {
+        const timeStr = plan.remindTime || '20:00';
+        const parts = timeStr.split(':');
+        const h = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const remindMinutes = h * 60 + m;
+        if (Math.abs(nowMinutes - remindMinutes) > 90) return;
+        if (state.lastNotif[plan.id] === today) return;
+
+        const left = getTodayTasks(plan).filter(function(t) { return !t.done; }).length;
+        if (left <= 0) return;
+
+        new Notification('Ebbinghaus · ' + plan.name, {
+          body: 'Heute noch ' + left + ' Einträge zu wiederholen – tippen zum Check-in',
+          icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="80">🧠</text></svg>',
+          tag: 'ebbinghaus-' + plan.id,
+          requireInteraction: true
+        });
+        state.lastNotif[plan.id] = today;
+      });
+      saveState();
+    }
+
+    // ===== Install guide =====
+    function showInstallGuide() {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isAndroid = /Android/.test(navigator.userAgent);
+      let msg = '';
+      if (isIOS) {
+        msg = '[iPhone / iPad]\n\n1. mit Safari diese Seite öffnen\n2. Tippe unten auf den Teilen-Button □↑\n3. scrolle zu «Zum Home-Bildschirm»\n4. tippe auf «Hinzufügen»\n\nDanach erscheint das Icon auf dem Home-Bildschirm. Tippen für Vollbild-Öffnung.';
+      } else if (isAndroid) {
+        msg = '[Android]\n\n1. Öffne diese Seite mit Chrome\n2. Tippe oben rechts auf das ⋮ Menü\n3. Wähle «Zum Home-Bildschirm» oder «App installieren»\n4. Bestätige\n\nDanach direkt vom Home-Bildschirm öffnen.';
+      } else {
+        msg = 'Bitte öffne diese Seite mit Safari (iOS) oder Chrome (Android), dann:\n\n· iOS: Teilen → Zum Home-Bildschirm\n· Android: Menü → Zum Home-Bildschirm / App installieren';
+      }
+      alert(msg);
+    }
+
+    function maybeShowInstallBanner() {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+      const banner = document.getElementById('installBanner');
+      if (!isStandalone && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+        banner.classList.add('show');
+      } else {
+        banner.classList.remove('show');
+      }
+    }
+
+    // ===== Data =====
+    function exportData() {
+      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Ebbinghaus-Gesamtbackup_' + todayStr() + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function importData() {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.json';
+      input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function() {
+          try {
+            const data = JSON.parse(reader.result);
+            if (!data.plans && !data.items) throw new Error('Formatfehler');
+            if (!confirm('Alle aktuellen Daten werden überschrieben. Import fortsetzen?')) return;
+            state = data;
+            if (!state.plans && state.items) {
+              state.plans = [{ id: uid(), name: 'Importierter Plan', items: state.items, preset: state.preset || 'classic' }];
+              state.activePlanId = state.plans[0].id;
+            }
+            saveState();
+            renderAll();
+            alert('Import erfolgreich');
+          } catch(err) { alert('Import fehlgeschlagen: falsches Format'); }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
+    function clearAllData() {
+      if (!confirm('Wirklich alle Pläne und Check-in-Einträge löschen? Nicht rückgängig zu machen!')) return;
+      if (!confirm('Wirklich endgültig löschen?')) return;
+      const id = uid();
+      state = { plans: [{ id: id, name: 'Deutsch-Plan', items: [], preset: 'classic', remindTime: '20:00' }], activePlanId: id, lastNotif: {} };
+      todayFilter = null;
+      planFilter = null;
+      saveState();
+      renderAll();
+    }
+
+    // ===== Navigation =====
+    function switchPage(page) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.getElementById('page-' + page).classList.add('active');
+      const nav = document.querySelector('.nav-item[data-page="' + page + '"]');
+      if (nav) nav.classList.add('active');
+      document.getElementById('fabAdd').style.display = page === 'plan' ? 'flex' : 'none';
+
+      if (page === 'today') renderToday();
+      if (page === 'plan') renderPlanContent();
+      if (page === 'plans') renderPlansPage();
+      if (page === 'settings') {
+        updateNotifStatus();
+        var plan = activePlan();
+        document.getElementById('remindTime').value = (plan && plan.remindTime) || '20:00';
+        document.getElementById('intervalPreset').value = (plan && plan.preset) || 'classic';
+      }
+    }
+
+    function renderAll() {
+      renderPlanSelect();
+      renderToday();
+      renderPlanContent();
+      renderPlansPage();
+      updateNavBadges();
+    }
+
+    // ===== Init =====
+    function init() {
+      loadState();
+      document.getElementById('defaultStart').valueAsDate = new Date();
+      var plan0 = activePlan();
+      document.getElementById('remindTime').value = (plan0 && plan0.remindTime) || '20:00';
+      document.getElementById('remindTime').addEventListener('change', function() {
+        var plan = activePlan();
+        if (plan) {
+          plan.remindTime = this.value;
+          saveState();
+        }
+      });
+      maybeShowInstallBanner();
+      renderAll();
+      setTimeout(checkAndNotify, 1500);
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') checkAndNotify();
+      });
+    }
+
+    init();
+  </script>
+
+
+</body></html>
